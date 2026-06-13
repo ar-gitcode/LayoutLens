@@ -1,0 +1,324 @@
+defaults:
+  - 0_default_dataset_room_envelopes.yaml
+
+# E1e, uf12 multitask: layout-depth (vggt_original) + binary layout mask
+# + layout surface normals. Identical to the uf12 layout-depth-only baseline
+# (e1b_uf12_layout_depth_only_original_regression) in every respect
+# (dataset paths, image size, train/val/test splits, eval manifest,
+# checkpoint init, optimizer, schedules, uf12 unfreezing, AMP, DDP, cuda)
+# EXCEPT:
+#   - load_normal: true on train/val/test dataset configs
+#   - mask losses (BCE + Dice) enabled with weights 0.10 each
+#   - normal head loss enabled with weight 0.1
+#   - mask_head and normal_head are instantiated
+#   - both new heads are added to gradient-clipping and given their own
+#     warmup+cosine LR schedules that mirror layout_depth_head
+#   - loss / metric logging keys for both heads are added
+#
+# This is the full multitask variant, combines the auxiliary signals
+# from e1c (mask) and e1d (normals).
+
+exp_name: e1e_uf12_layout_depth_mask_normals_original_regression
+
+img_size: 224
+patch_size: 14
+num_workers: 8
+seed_value: 42
+accum_steps: 1
+val_epoch_freq: 1
+max_img_per_gpu: 16
+
+limit_train_batches: 5000
+limit_val_batches: 2000
+max_epochs: 10
+
+unfreeze_n_blocks: 12
+backbone_lr: 1.0e-6
+
+data:
+  train:
+    _target_: data.dynamic_dataloader.DynamicTorchDataset
+    num_workers: ${num_workers}
+    max_img_per_gpu: ${max_img_per_gpu}
+    common_config:
+      img_size: ${img_size}
+      patch_size: ${patch_size}
+      max_img_per_gpu: ${max_img_per_gpu}
+      img_nums: [1, 4]
+
+    dataset:
+      _target_: data.composed_dataset.ComposedDataset
+      dataset_configs:
+        - _target_: data.datasets.room_envelopes.RoomEnvelopesDataset
+          split: train
+          DATA_DIR: ${oc.env:ROOMENV_DATA_WDS_DIR,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/data_wds_extracted}
+          len_train: 100000
+          load_mask: true
+          load_normal: true
+          mask_source: seen_mask
+          use_sequence_cache: true
+          use_real_extrinsics: true
+          extrinsics_manifest: ${oc.env:ROOMENV_EXTRINSICS_MANIFEST,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/extrinsics_manifest.npz}
+          require_extrinsics: false
+          exclude_invalid_extrinsics: true
+
+  val:
+    _target_: data.dynamic_dataloader.ManifestEvalLoader
+    num_workers: ${num_workers}
+    max_img_per_gpu: ${max_img_per_gpu}
+    common_config:
+      img_size: ${img_size}
+      patch_size: ${patch_size}
+      img_nums: [1, 5]
+      inside_random: false
+
+    dataset:
+      _target_: data.composed_dataset.ComposedDataset
+      dataset_configs:
+        - _target_: data.datasets.room_envelopes.RoomEnvelopesDataset
+          split: val
+          DATA_DIR: ${oc.env:ROOMENV_DATA_WDS_DIR,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/data_wds_extracted}
+          len_val: 10000
+          load_mask: true
+          load_normal: true
+          mask_source: seen_mask
+          use_sequence_cache: true
+          use_real_extrinsics: true
+          extrinsics_manifest: ${oc.env:ROOMENV_EXTRINSICS_MANIFEST,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/extrinsics_manifest.npz}
+          require_extrinsics: false
+          exclude_invalid_extrinsics: true
+          manifest_path: ${oc.env:ROOMENV_EVAL_CACHE_DIR,cache/room_envelopes}/eval_manifest_val_mixed_1to5_overlap_seed4550.json
+
+  test:
+    _target_: data.dynamic_dataloader.DynamicTorchDataset
+    num_workers: ${num_workers}
+    max_img_per_gpu: ${max_img_per_gpu}
+    common_config:
+      img_size: ${img_size}
+      patch_size: ${patch_size}
+      img_nums: [2, 4]
+
+    dataset:
+      _target_: data.composed_dataset.ComposedDataset
+      dataset_configs:
+        - _target_: data.datasets.room_envelopes.RoomEnvelopesDataset
+          split: test
+          DATA_DIR: ${oc.env:ROOMENV_DATA_WDS_DIR,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/data_wds_extracted}
+          len_test: 4000
+          load_mask: true
+          load_normal: true
+          mask_source: seen_mask
+          use_sequence_cache: true
+          use_real_extrinsics: true
+          extrinsics_manifest: ${oc.env:ROOMENV_EXTRINSICS_MANIFEST,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/extrinsics_manifest.npz}
+          require_extrinsics: false
+          exclude_invalid_extrinsics: true
+
+
+logging:
+  log_dir: logs/${exp_name}
+  log_visuals: false
+  log_freq: 50
+  log_level_primary: INFO
+  log_level_secondary: WARNING
+  all_ranks: False
+
+  use_wandb: false
+  wandb_project: vggt_re
+  wandb_entity: null
+  wandb_run_name: ${exp_name}
+  wandb_mode: "online"
+  wandb_log_images_every_n_steps: 200
+
+  clean_log_enabled: true
+  clean_log_2d: true
+  clean_log_3d: true
+  clean_log_gt_3d: true
+  clean_max_scenes_per_eval: 4
+  clean_max_points_preview: 50000
+  clean_save_full_pointcloud: false
+  clean_view_indices: [0]
+  clean_log_train_every_n_steps: 500
+
+  tensorboard_writer:
+    _target_: train_utils.tb_writer.TensorBoardLogger
+    path: ${logging.log_dir}/tensorboard
+
+  scalar_keys_to_log:
+    train:
+      keys_to_log:
+        - objective
+        - loss_conf_layout_depth
+        - loss_reg_layout_depth
+        - loss_grad_layout_depth
+        - loss_mask_bce
+        - loss_mask_dice
+        - loss_normal_head
+    val:
+      keys_to_log:
+        - objective
+        - loss_conf_layout_depth
+        - loss_reg_layout_depth
+        - loss_grad_layout_depth
+        - loss_mask_bce
+        - loss_mask_dice
+        - loss_normal_head
+
+  metric_keys_to_log:
+    val:
+      - Metrics/val/AbsRel_all
+      - Metrics/val/AbsRel_visible
+      - Metrics/val/AbsRel_occluded
+      - Metrics/val/Delta1_all
+      - Metrics/val/RMSE_all
+      - Metrics/val/Mask_IoU
+      - Metrics/val/Mask_F1
+      - Metrics/val/Normal_MeanAngErr
+
+
+checkpoint:
+  save_dir: logs/${exp_name}/ckpts
+  save_freq: 1
+  resume_checkpoint_path: ${oc.env:ROOMENV_WEIGHTS_DIR,/path/to/weights}/model_layout_init_from_depth.pt
+  strict: False
+
+# Layout-depth loss block is byte-identical to the uf12 baseline
+# (vggt_original loss). Auxiliary supervision adds:
+#   - BCE + Dice on layout_mask_logits vs. layout_masks
+#   - cosine loss on layout_normal vs. layout_normals (gated by
+#     layout_normal_masks)
+loss:
+  _target_: loss_room_envelope.RoomEnvelopeLoss
+
+  layout_depth_loss_type: "vggt_original"
+  vggt_layout_depth_weight: 1.0
+  vggt_layout_depth_gradient_loss_fn: "grad"
+  vggt_layout_depth_valid_range: -1
+
+  binary_mask_weight: 0.10
+  binary_dice_weight: 0.10
+  normal_head_weight: 0.1
+  normal_consistency_weight: 0.0
+
+  visible_depth_weight: 0.0
+  pointmap_weight: 0.0
+  camera_weight: 0.0
+
+optim:
+  param_group_modifiers: False
+  frozen_module_names:
+    - "aggregator"
+  unfreeze_last_n_backbone_blocks: ${unfreeze_n_blocks}
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 1.0e-4
+    weight_decay: 0.01
+
+  amp:
+    enabled: True
+    amp_dtype: bfloat16
+
+  gradient_clip:
+    _target_: train_utils.gradient_clip.GradientClipper
+    configs:
+      - module_name:
+          - "layout_depth_head"
+          - "mask_head"
+          - "normal_head"
+          - "aggregator"
+        max_norm: 1.0
+        norm_type: 2
+
+  options:
+    lr:
+      # Head LR schedule, IDENTICAL shape and values to the uf12 baseline.
+      - param_names: ["layout_depth_head.*"]
+        scheduler:
+          _target_: fvcore.common.param_scheduler.CompositeParamScheduler
+          schedulers:
+            - _target_: fvcore.common.param_scheduler.LinearParamScheduler
+              start_value: 1.0e-8
+              end_value: 1.0e-4
+            - _target_: fvcore.common.param_scheduler.CosineParamScheduler
+              start_value: 1.0e-4
+              end_value: 1.0e-7
+          lengths: [0.05, 0.95]
+          interval_scaling: [rescaled, rescaled]
+
+      # Mask head, same warmup+cosine shape as layout_depth_head.
+      - param_names: ["mask_head.*"]
+        scheduler:
+          _target_: fvcore.common.param_scheduler.CompositeParamScheduler
+          schedulers:
+            - _target_: fvcore.common.param_scheduler.LinearParamScheduler
+              start_value: 1.0e-8
+              end_value: 1.0e-4
+            - _target_: fvcore.common.param_scheduler.CosineParamScheduler
+              start_value: 1.0e-4
+              end_value: 1.0e-7
+          lengths: [0.05, 0.95]
+          interval_scaling: [rescaled, rescaled]
+
+      # Normal head, same warmup+cosine shape as layout_depth_head.
+      - param_names: ["normal_head.*"]
+        scheduler:
+          _target_: fvcore.common.param_scheduler.CompositeParamScheduler
+          schedulers:
+            - _target_: fvcore.common.param_scheduler.LinearParamScheduler
+              start_value: 1.0e-8
+              end_value: 1.0e-4
+            - _target_: fvcore.common.param_scheduler.CosineParamScheduler
+              start_value: 1.0e-4
+              end_value: 1.0e-7
+          lengths: [0.05, 0.95]
+          interval_scaling: [rescaled, rescaled]
+
+      # Aggregator schedule, IDENTICAL to the uf12 baseline.
+      - param_names: ["aggregator.*"]
+        scheduler:
+          _target_: fvcore.common.param_scheduler.CompositeParamScheduler
+          schedulers:
+            - _target_: fvcore.common.param_scheduler.LinearParamScheduler
+              start_value: 1.0e-9
+              end_value: ${backbone_lr}
+            - _target_: fvcore.common.param_scheduler.CosineParamScheduler
+              start_value: ${backbone_lr}
+              end_value: 1.0e-9
+          lengths: [0.05, 0.95]
+          interval_scaling: [rescaled, rescaled]
+
+      - scheduler:
+          _target_: fvcore.common.param_scheduler.ConstantParamScheduler
+          value: 1.0e-5
+
+    weight_decay:
+      - scheduler:
+          _target_: fvcore.common.param_scheduler.ConstantParamScheduler
+          value: 0.01
+
+model:
+  _target_: vggt.models.vggt.VGGT
+
+  enable_camera: False
+  enable_depth: False
+  enable_point: False
+  enable_track: False
+  enable_layout_depth: True
+  enable_layout_mask: True
+  enable_layout_normal: True
+  enable_seg: False
+
+distributed:
+  backend: nccl
+  comms_dtype: null
+  find_unused_parameters: True
+  timeout_mins: 30
+  gradient_as_bucket_view: True
+  bucket_cap_mb: 25
+  broadcast_buffers: False
+
+cuda:
+  cudnn_deterministic: False
+  cudnn_benchmark: True
+  allow_tf32: True

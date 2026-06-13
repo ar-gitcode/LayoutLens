@@ -1,0 +1,370 @@
+defaults:
+  - 0_default_dataset_room_envelopes.yaml
+
+# E3a-OCA, OCA-fine-tuned (warm-started) version of e3a.
+#
+# This is e3a_uf12_layout_depth_mask_camera_original_regression with a SINGLE
+# Occlusion-Aware Cross-View Attention (OCA) block ADDED, warm-started from the
+# converged e3a checkpoint. It is byte-identical to e3a in every respect
+# (dataset, image size, train/val/test splits, eval manifest, real-extrinsics
+# policy, camera supervision, layout-depth + mask losses and weights, optimizer,
+# head LR schedules, uf12 unfreezing, AMP, DDP, cuda, logging) EXCEPT:
+#   1. model.enable_oca: True and the model.oca:* sub-block are added
+#      (ONE OCA block, the code supports exactly one; see OCA_BLOCKS_AUDIT.md).
+#      target_layers:[23], use_epipolar_bias:False, pure mask-gated cross-view
+#      attention, the same OCA flavour as e2a. OCA touches the layout-depth token
+#      path only (+~4.2M params); out_proj is zero-initialised so at step 0 the
+#      model is numerically identical to e3a.
+#   2. an oca.* LR param group is added with the same warmup+cosine shape as
+#      layout_depth_head.* (matching e2a's treatment of OCA).
+#   3. "oca" is added to optim.gradient_clip.configs[0].module_name.
+#   4. WARM-START init: checkpoint.resume_checkpoint_path points at e3a's best.pt
+#      (NOT model_layout_init_from_depth.pt), and checkpoint.init_weights_only:
+#      True loads ONLY the model weights (strict: False) and starts a FRESH
+#      optimizer/scheduler from epoch=0/steps=0. The OCA params are the expected
+#      missing keys; there should be no unexpected keys.
+#
+# This is the OCA arm of a clean A/B against e3a: OCA is the ONLY architectural
+# change. (Its planar-consistency sibling is e3b-OCA.)
+
+exp_name: e3a_oca_warmstart_uf12_layout_depth_mask_camera_original_regression
+
+img_size: 224
+patch_size: 14
+num_workers: 8
+seed_value: 42
+accum_steps: 1
+val_epoch_freq: 1
+max_img_per_gpu: 16
+
+limit_train_batches: 5000
+limit_val_batches: 2000
+max_epochs: 10
+
+unfreeze_n_blocks: 12
+backbone_lr: 1.0e-6
+
+data:
+  train:
+    _target_: data.dynamic_dataloader.DynamicTorchDataset
+    num_workers: ${num_workers}
+    max_img_per_gpu: ${max_img_per_gpu}
+    common_config:
+      img_size: ${img_size}
+      patch_size: ${patch_size}
+      max_img_per_gpu: ${max_img_per_gpu}
+      img_nums: [1, 4]
+
+    dataset:
+      _target_: data.composed_dataset.ComposedDataset
+      dataset_configs:
+        - _target_: data.datasets.room_envelopes.RoomEnvelopesDataset
+          split: train
+          DATA_DIR: ${oc.env:ROOMENV_DATA_WDS_DIR,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/data_wds_extracted}
+          len_train: 100000
+          load_mask: true
+          load_normal: false
+          mask_source: seen_mask
+          use_sequence_cache: true
+          # Camera supervision requires REAL extrinsics (see header).
+          use_real_extrinsics: true
+          extrinsics_manifest: ${oc.env:ROOMENV_EXTRINSICS_MANIFEST,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/extrinsics_manifest.npz}
+          require_extrinsics: true
+          fallback_identity_extrinsics: false
+          exclude_invalid_extrinsics: true
+
+  val:
+    _target_: data.dynamic_dataloader.ManifestEvalLoader
+    num_workers: ${num_workers}
+    max_img_per_gpu: ${max_img_per_gpu}
+    common_config:
+      img_size: ${img_size}
+      patch_size: ${patch_size}
+      img_nums: [1, 5]
+      inside_random: false
+
+    dataset:
+      _target_: data.composed_dataset.ComposedDataset
+      dataset_configs:
+        - _target_: data.datasets.room_envelopes.RoomEnvelopesDataset
+          split: val
+          DATA_DIR: ${oc.env:ROOMENV_DATA_WDS_DIR,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/data_wds_extracted}
+          len_val: 10000
+          load_mask: true
+          load_normal: false
+          mask_source: seen_mask
+          use_sequence_cache: true
+          use_real_extrinsics: true
+          extrinsics_manifest: ${oc.env:ROOMENV_EXTRINSICS_MANIFEST,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/extrinsics_manifest.npz}
+          require_extrinsics: true
+          fallback_identity_extrinsics: false
+          exclude_invalid_extrinsics: true
+          manifest_path: ${oc.env:ROOMENV_EVAL_CACHE_DIR,cache/room_envelopes}/eval_manifest_val_mixed_1to5_overlap_seed4550.json
+
+  test:
+    _target_: data.dynamic_dataloader.DynamicTorchDataset
+    num_workers: ${num_workers}
+    max_img_per_gpu: ${max_img_per_gpu}
+    common_config:
+      img_size: ${img_size}
+      patch_size: ${patch_size}
+      img_nums: [2, 4]
+
+    dataset:
+      _target_: data.composed_dataset.ComposedDataset
+      dataset_configs:
+        - _target_: data.datasets.room_envelopes.RoomEnvelopesDataset
+          split: test
+          DATA_DIR: ${oc.env:ROOMENV_DATA_WDS_DIR,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/data_wds_extracted}
+          len_test: 4000
+          load_mask: true
+          load_normal: false
+          mask_source: seen_mask
+          use_sequence_cache: true
+          use_real_extrinsics: true
+          extrinsics_manifest: ${oc.env:ROOMENV_EXTRINSICS_MANIFEST,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/extrinsics_manifest.npz}
+          require_extrinsics: true
+          fallback_identity_extrinsics: false
+          exclude_invalid_extrinsics: true
+
+
+logging:
+  log_dir: logs/${exp_name}
+  log_visuals: false
+  log_freq: 50
+  log_level_primary: INFO
+  log_level_secondary: WARNING
+  all_ranks: False
+
+  use_wandb: false
+  wandb_project: vggt_re
+  wandb_entity: null
+  wandb_run_name: ${exp_name}
+  wandb_mode: "online"
+  wandb_log_images_every_n_steps: 200
+
+  clean_log_enabled: true
+  clean_log_2d: true
+  clean_log_3d: true
+  clean_log_gt_3d: true
+  clean_max_scenes_per_eval: 4
+  clean_max_points_preview: 50000
+  clean_save_full_pointcloud: false
+  clean_view_indices: [0]
+  clean_log_train_every_n_steps: 500
+
+  tensorboard_writer:
+    _target_: train_utils.tb_writer.TensorBoardLogger
+    path: ${logging.log_dir}/tensorboard
+
+  scalar_keys_to_log:
+    train:
+      keys_to_log:
+        - objective
+        - loss_conf_layout_depth
+        - loss_reg_layout_depth
+        - loss_grad_layout_depth
+        - loss_mask_bce
+        - loss_mask_dice
+        - loss_camera
+        - loss_T
+        - loss_R
+        - loss_FL
+    val:
+      keys_to_log:
+        - objective
+        - loss_conf_layout_depth
+        - loss_reg_layout_depth
+        - loss_grad_layout_depth
+        - loss_mask_bce
+        - loss_mask_dice
+        - loss_camera
+        - loss_T
+        - loss_R
+        - loss_FL
+
+  metric_keys_to_log:
+    val:
+      - Metrics/val/AbsRel_all
+      - Metrics/val/AbsRel_visible
+      - Metrics/val/AbsRel_occluded
+      - Metrics/val/Delta1_all
+      - Metrics/val/RMSE_all
+      - Metrics/val/Mask_IoU
+      - Metrics/val/Mask_F1
+
+
+checkpoint:
+  save_dir: logs/${exp_name}/ckpts
+  save_freq: 1
+  # WARM-START from the converged e3a checkpoint (see header). best.pt is a FULL
+  # training checkpoint (model + optimizer + steps); init_weights_only loads ONLY
+  # the model weights and starts a fresh optimizer/scheduler from step 0.
+  resume_checkpoint_path: ${oc.env:ROOMENV_E3A_BEST_CKPT,logs/e3a_uf12_layout_depth_mask_camera_original_regression/ckpts/best.pt}
+  strict: False
+  init_weights_only: True
+
+# Layout-depth + mask + camera loss block is byte-identical to e3a.
+# OCA adds NO loss term (it is an architectural change to the layout-depth token
+# path only).
+loss:
+  _target_: loss_room_envelope.RoomEnvelopeLoss
+
+  layout_depth_loss_type: "vggt_original"
+  vggt_layout_depth_weight: 1.0
+  vggt_layout_depth_gradient_loss_fn: "grad"
+  vggt_layout_depth_valid_range: -1
+
+  binary_mask_weight: 0.10
+  binary_dice_weight: 0.10
+  normal_head_weight: 0.0
+  normal_consistency_weight: 0.0
+
+  visible_depth_weight: 0.0
+  pointmap_weight: 0.0
+
+  # Camera pose supervision (canonical VGGT camera loss): translation +
+  # rotation + FoV L1 on the iterative pose_enc_list vs GT extrinsics/intrinsics.
+  camera_weight: 0.5
+  camera_loss_type: "vggt_original"
+
+  # Planar consistency OFF (matches e3a; the planar arm is e3b-OCA).
+  planar_consistency_weight: 0.0
+
+optim:
+  param_group_modifiers: False
+  frozen_module_names:
+    - "aggregator"
+  unfreeze_last_n_backbone_blocks: ${unfreeze_n_blocks}
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 1.0e-4
+    weight_decay: 0.01
+
+  amp:
+    enabled: True
+    amp_dtype: bfloat16
+
+  gradient_clip:
+    _target_: train_utils.gradient_clip.GradientClipper
+    configs:
+      - module_name:
+          - "layout_depth_head"
+          - "mask_head"
+          - "camera_head"
+          - "oca"
+          - "aggregator"
+        max_norm: 1.0
+        norm_type: 2
+
+  options:
+    lr:
+      # Head LR schedule, IDENTICAL shape and values to e3a / e1c.
+      - param_names: ["layout_depth_head.*"]
+        scheduler:
+          _target_: fvcore.common.param_scheduler.CompositeParamScheduler
+          schedulers:
+            - _target_: fvcore.common.param_scheduler.LinearParamScheduler
+              start_value: 1.0e-8
+              end_value: 1.0e-4
+            - _target_: fvcore.common.param_scheduler.CosineParamScheduler
+              start_value: 1.0e-4
+              end_value: 1.0e-7
+          lengths: [0.05, 0.95]
+          interval_scaling: [rescaled, rescaled]
+
+      # Mask head, same warmup+cosine shape as layout_depth_head.
+      - param_names: ["mask_head.*"]
+        scheduler:
+          _target_: fvcore.common.param_scheduler.CompositeParamScheduler
+          schedulers:
+            - _target_: fvcore.common.param_scheduler.LinearParamScheduler
+              start_value: 1.0e-8
+              end_value: 1.0e-4
+            - _target_: fvcore.common.param_scheduler.CosineParamScheduler
+              start_value: 1.0e-4
+              end_value: 1.0e-7
+          lengths: [0.05, 0.95]
+          interval_scaling: [rescaled, rescaled]
+
+      # OCA, same warmup+cosine shape as layout_depth_head (matches e2a).
+      - param_names: ["oca.*"]
+        scheduler:
+          _target_: fvcore.common.param_scheduler.CompositeParamScheduler
+          schedulers:
+            - _target_: fvcore.common.param_scheduler.LinearParamScheduler
+              start_value: 1.0e-8
+              end_value: 1.0e-4
+            - _target_: fvcore.common.param_scheduler.CosineParamScheduler
+              start_value: 1.0e-4
+              end_value: 1.0e-7
+          lengths: [0.05, 0.95]
+          interval_scaling: [rescaled, rescaled]
+
+      # Aggregator schedule, IDENTICAL to e3a / e1c.
+      - param_names: ["aggregator.*"]
+        scheduler:
+          _target_: fvcore.common.param_scheduler.CompositeParamScheduler
+          schedulers:
+            - _target_: fvcore.common.param_scheduler.LinearParamScheduler
+              start_value: 1.0e-9
+              end_value: ${backbone_lr}
+            - _target_: fvcore.common.param_scheduler.CosineParamScheduler
+              start_value: ${backbone_lr}
+              end_value: 1.0e-9
+          lengths: [0.05, 0.95]
+          interval_scaling: [rescaled, rescaled]
+
+      # Default constant group, catches camera_head.* (pretrained head,
+      # conservative 1e-5 fine-tune; matches the camera-supervised precedent).
+      - scheduler:
+          _target_: fvcore.common.param_scheduler.ConstantParamScheduler
+          value: 1.0e-5
+
+    weight_decay:
+      - scheduler:
+          _target_: fvcore.common.param_scheduler.ConstantParamScheduler
+          value: 0.01
+
+model:
+  _target_: vggt.models.vggt.VGGT
+
+  enable_camera: True
+  enable_depth: False
+  enable_point: False
+  enable_track: False
+  enable_layout_depth: True
+  enable_layout_mask: True
+  enable_layout_normal: False
+  enable_seg: False
+
+  # OCA, mask-gated cross-view attention, NO epipolar bias (same as e2a).
+  # ONE block only (the code supports exactly one; target_layers is shared-weight
+  # multi-layer injection, NOT a stack, see OCA_BLOCKS_AUDIT.md).
+  enable_oca: True
+  oca:
+    target_layers: [23]
+    num_heads: 8
+    qkv_dim: 512
+    use_epipolar_bias: False
+    alpha: 1.0
+    sigma_pixels: 4.0
+    bias_clamp_min: -50.0
+    bias_clamp_max: 0.0
+    camera_source: "gt"
+    mask_warmup_steps: 0
+
+distributed:
+  backend: nccl
+  comms_dtype: null
+  find_unused_parameters: True
+  timeout_mins: 30
+  gradient_as_bucket_view: True
+  bucket_cap_mb: 25
+  broadcast_buffers: False
+
+cuda:
+  cudnn_deterministic: False
+  cudnn_benchmark: True
+  allow_tf32: True

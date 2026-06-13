@@ -1,0 +1,21 @@
+torch
+torchvision
+numpy<2
+Pillow
+einops
+opencv-python
+safetensors
+huggingface_hub
+hydra-core
+omegaconf
+fvcore
+iopath
+wandb
+tensorboard
+trimesh
+scipy
+matplotlib
+tqdm
+pytest
+wcmatch
+-e .

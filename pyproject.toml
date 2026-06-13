@@ -1,0 +1,54 @@
+[project]
+name = "layoutlens"
+version = "0.1.0"
+description = "Feed-forward room envelope reconstruction from RGB images: dense amodal structural geometry with a VGGT-based backbone."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "VGGT License" }
+authors = [
+    { name = "Arjun Raj" },
+]
+keywords = [
+    "room envelope reconstruction",
+    "amodal structural geometry",
+    "layout depth",
+    "multi-view feed-forward reconstruction",
+    "VGGT",
+    "indoor scene understanding",
+]
+dependencies = [
+    "numpy",
+    "Pillow",
+    "einops",
+    "opencv-python",
+    "safetensors",
+    "huggingface_hub",
+]
+
+[project.optional-dependencies]
+train = [
+    "torch==2.3.1",
+    "torchvision==0.18.1",
+    "hydra-core",
+    "omegaconf",
+    "fvcore",
+    "iopath",
+    "wandb",
+    "tensorboard",
+    "trimesh",
+    "scipy",
+    "matplotlib",
+    "tqdm",
+    "wcmatch",
+]
+dev = [
+    "pytest",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vggt*", "room_envelopes*"]

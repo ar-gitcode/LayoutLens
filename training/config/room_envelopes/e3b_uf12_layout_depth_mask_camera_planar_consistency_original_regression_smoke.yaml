@@ -1,0 +1,21 @@
+# SMOKE override for e3b (camera + layout-depth + mask + planar consistency).
+# NOT for real training, validates the full Trainer/DDP/checkpoint path
+# end-to-end (incl. the planar-consistency term in the live objective and the
+# loss_planar_consistency logging key): inherits e3b verbatim and only shrinks
+# the schedule + disables W&B, with a separate `_smoke` exp_name.
+
+defaults:
+  - e3b_uf12_layout_depth_mask_camera_planar_consistency_original_regression
+  - _self_
+
+exp_name: e3b_uf12_layout_depth_mask_camera_planar_consistency_original_regression_smoke
+
+num_workers: 2
+max_epochs: 1
+limit_train_batches: 20
+limit_val_batches: 5
+# Smoke runs on a 23GB L4, shrink batch so the full Trainer fits (see e3a smoke).
+max_img_per_gpu: 4
+
+logging:
+  use_wandb: false

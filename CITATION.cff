@@ -1,0 +1,61 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the accompanying thesis."
+title: "LayoutLens: Feed-Forward Room Envelope Reconstruction from RGB Images"
+abstract: >-
+  LayoutLens adapts a feed-forward multi-view 3D vision model for dense amodal
+  room-envelope reconstruction from RGB images. It predicts structural room
+  geometry, such as walls, floors, and ceilings, including regions occluded by
+  furniture, rather than ordinary visible-scene depth. This is a research
+  prototype released alongside an undergraduate thesis.
+type: software
+authors:
+  - given-names: Arjun
+    family-names: Raj
+    affiliation: "The Australian National University"
+version: "0.1.0"
+date-released: "2026-06-13"
+license-url: "https://github.com/ar-gitcode/LayoutLens/blob/main/LICENSE"
+keywords:
+  - room envelope reconstruction
+  - amodal structural geometry
+  - layout depth
+  - multi-view feed-forward reconstruction
+  - VGGT
+  - indoor scene understanding
+repository-code: "https://github.com/ar-gitcode/LayoutLens"
+references:
+  - type: thesis
+    title: "LayoutLens: Feed-Forward Room Envelope Reconstruction from RGB Images"
+    authors:
+      - given-names: Arjun
+        family-names: Raj
+    year: 2026
+    institution:
+      name: "The Australian National University"
+    notes: "COMP4550 undergraduate research project."
+  - type: conference-paper
+    title: "VGGT: Visual Geometry Grounded Transformer"
+    authors:
+      - given-names: Jianyuan
+        family-names: Wang
+      - given-names: Minghao
+        family-names: Chen
+      - given-names: Nikita
+        family-names: Karaev
+      - given-names: Andrea
+        family-names: Vedaldi
+      - given-names: Christian
+        family-names: Rupprecht
+      - given-names: David
+        family-names: Novotny
+    year: 2025
+    notes: "Backbone adapted by this work. Published at CVPR 2025 (Best Paper Award); arXiv:2503.11651."
+  - type: article
+    title: "Room Envelopes: A Synthetic Dataset for Indoor Layout Reconstruction from Images"
+    authors:
+      - given-names: Sam
+        family-names: Bahrami
+      - given-names: Dylan
+        family-names: Campbell
+    year: 2025
+    notes: "Primary dataset and task formulation. arXiv:2511.03970."

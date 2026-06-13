@@ -1,0 +1,114 @@
+# Template for the dataset config (Room Envelopes variant).
+# Identical to the shared dataset defaults; contents are dataset-agnostic.
+data:
+  train:
+    _target_: data.dynamic_dataloader.DynamicTorchDataset
+    num_workers: 8
+    max_img_per_gpu: 48
+
+    shuffle: False
+    pin_memory: False
+    common_config:
+      fix_img_num: -1
+      fix_aspect_ratio: 1.0
+      load_track: False
+      track_num: 0
+      training: True
+      inside_random: True
+
+      img_size: 224
+      patch_size: 14
+
+      rescale: True
+      rescale_aug: False
+      landscape_check: False
+      debug: False
+      get_nearby: True
+      load_depth: True
+
+      img_nums: [2, 8]
+      max_img_per_gpu: 16
+      allow_duplicate_img: True
+      repeat_batch: False
+
+      augs:
+        cojitter: True
+        cojitter_ratio: 0.5
+        scales: [0.85, 1.15]
+        aspects: [0.9, 1.1]
+        gray_scale: False
+        color_jitter:
+          brightness: 0.2
+          contrast: 0.2
+          saturation: 0.2
+          hue: 0.05
+          p: 0.1
+        gau_blur: False
+
+  val:
+    _target_: data.dynamic_dataloader.DynamicTorchDataset
+    num_workers: 8
+    max_img_per_gpu: 48
+    shuffle: False
+    pin_memory: False
+
+    common_config:
+      fix_img_num: -1
+      fix_aspect_ratio: 1.0
+      load_track: False
+      track_num: 0
+      training: False
+      inside_random: True
+      img_size: 518
+      patch_size: 14
+      rescale: True
+      rescale_aug: True
+      landscape_check: False
+      debug: False
+      get_nearby: True
+      load_depth: True
+      img_nums: [2, 4]
+      allow_duplicate_img: True
+
+      augs:
+        cojitter: False
+        cojitter_ratio: 0.5
+        scales: null
+        aspects: [1.0, 1.0]
+        color_jitter: null
+        gray_scale: False
+        gau_blur: False
+
+  test:
+    _target_: data.dynamic_dataloader.DynamicTorchDataset
+    num_workers: 8
+    max_img_per_gpu: 48
+    shuffle: False
+    pin_memory: False
+
+    common_config:
+      fix_img_num: -1
+      fix_aspect_ratio: 1.0
+      load_track: False
+      track_num: 0
+      training: False
+      inside_random: True
+      img_size: 518
+      patch_size: 14
+      rescale: True
+      rescale_aug: True
+      landscape_check: False
+      debug: False
+      get_nearby: True
+      load_depth: True
+      img_nums: [2, 4]
+      allow_duplicate_img: True
+
+      augs:
+        cojitter: False
+        cojitter_ratio: 0.5
+        scales: null
+        aspects: [1.0, 1.0]
+        color_jitter: null
+        gray_scale: False
+        gau_blur: False

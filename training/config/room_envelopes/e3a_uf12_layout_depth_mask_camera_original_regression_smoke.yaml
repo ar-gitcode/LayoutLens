@@ -1,0 +1,23 @@
+# SMOKE override for e3a (camera + layout-depth + mask, no planar). NOT for
+# real training, validates the full Trainer/DDP/checkpoint path end-to-end:
+# inherits e3a verbatim and only shrinks the schedule + disables W&B, and uses a
+# separate `_smoke` exp_name so it never touches the real e3a log dir.
+
+defaults:
+  - e3a_uf12_layout_depth_mask_camera_original_regression
+  - _self_
+
+exp_name: e3a_uf12_layout_depth_mask_camera_original_regression_smoke
+
+num_workers: 2
+max_epochs: 1
+limit_train_batches: 20
+limit_val_batches: 5
+# Smoke runs on a 23GB L4: shrink the batch so the full Trainer (DDP +
+# full-res DPT heads + optimizer state) fits. The REAL e3a config keeps
+# max_img_per_gpu: 16 to match the e-series; reduce it there too if training
+# on a <40GB GPU (both A and B must use the same value for a fair comparison).
+max_img_per_gpu: 4
+
+logging:
+  use_wandb: false

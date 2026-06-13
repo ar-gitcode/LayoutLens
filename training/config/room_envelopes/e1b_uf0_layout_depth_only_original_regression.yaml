@@ -1,0 +1,18 @@
+# E1b unfreeze-sweep, uf0: VGGT fully frozen (matches E1b exactly).
+#
+# Part of the E1b unfreeze sweep (uf0/uf2/uf4/uf8/uf12). See
+# docs/e1b_unfreeze_sweep.md. This config inherits E1b verbatim and only
+# overrides exp_name so the run lands in its own log dir. Aggregator stays
+# fully frozen; only layout_depth_head is trainable. Use this as the sweep's
+# baseline (re-runs E1b under the sweep naming).
+
+defaults:
+  - e1b_layout_depth_only_frozen_original_regression.yaml
+  - _self_
+
+exp_name: e1b_uf0_layout_depth_only_original_regression
+
+# Top-level handles documented for parity with uf2/uf4/uf8/uf12. uf0 keeps
+# unfreeze_n_blocks = 0, so backbone_lr is unused (no aggregator param group).
+unfreeze_n_blocks: 0
+backbone_lr: 1.0e-6

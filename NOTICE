@@ -1,0 +1,34 @@
+LayoutLens
+==========
+
+LayoutLens is distributed under the VGGT License (see the LICENSE file),
+reproduced verbatim from the VGGT project by Meta Platforms, Inc.
+(https://github.com/facebookresearch/vggt).
+
+Provenance and attribution
+--------------------------
+- The code under vggt/ is derived from facebookresearch/vggt and retains the
+  original Meta copyright headers. Those portions are Copyright (c) Meta
+  Platforms, Inc. and affiliates.
+- The remaining code, configuration, and documentation are Copyright (c) 2026
+  Arjun Raj.
+- All of the above is distributed under the terms of the VGGT License in the
+  LICENSE file.
+
+Modifications
+-------------
+- The vggt/ code has been modified for room-envelope prediction, including added
+  prediction heads and a cross-view attention module.
+
+Model checkpoints
+-----------------
+- Checkpoints are not distributed in this repository (see docs/checkpoints.md).
+  They are derived from VGGT model weights and are subject to the VGGT License.
+  They were fine-tuned from the original VGGT-1B weights, which are licensed for
+  non-commercial use, so the released checkpoints are for non-commercial use
+  only. Commercial use would require retraining from the separately licensed
+  VGGT-1B-Commercial weights.
+
+Datasets
+--------
+- Datasets are not redistributed and remain governed by their own licenses.

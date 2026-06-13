@@ -1,0 +1,110 @@
+defaults:
+  - 0_default_dataset_room_envelopes.yaml
+
+# E0 (Room Envelopes), Vanilla VGGT zero-shot baseline (EVAL-ONLY).
+# Adapted from the shared room-envelope template; only the dataset target and
+# DATA_DIR are swapped.
+#
+# Use --use-depth-as-layout (auto-enabled by EXPERIMENT_REGISTRY for E0) and
+# --checkpoint /path/to/weights/model.pt
+# Otherwise the model evaluates with random init and metrics are meaningless.
+
+exp_name: e0_vanilla_eval_only
+
+img_size: 224
+patch_size: 14
+num_workers: 4
+seed_value: 42
+
+data:
+  train:
+    _target_: data.dynamic_dataloader.DynamicTorchDataset
+    num_workers: ${num_workers}
+    max_img_per_gpu: 4
+    common_config:
+      img_size: ${img_size}
+      patch_size: ${patch_size}
+      max_img_per_gpu: 4
+      img_nums: [2, 4]
+
+    dataset:
+      _target_: data.composed_dataset.ComposedDataset
+      dataset_configs:
+        - _target_: data.datasets.room_envelopes.RoomEnvelopesDataset
+          split: train
+          DATA_DIR: ${oc.env:ROOMENV_DATA_WDS_DIR,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/data_wds_extracted}
+          len_train: 100
+          load_mask: false
+          load_normal: false
+          use_sequence_cache: true
+
+  val:
+    _target_: data.dynamic_dataloader.DynamicTorchDataset
+    num_workers: ${num_workers}
+    max_img_per_gpu: 4
+    common_config:
+      img_size: ${img_size}
+      patch_size: ${patch_size}
+      img_nums: [2, 4]
+
+    dataset:
+      _target_: data.composed_dataset.ComposedDataset
+      dataset_configs:
+        - _target_: data.datasets.room_envelopes.RoomEnvelopesDataset
+          split: val
+          DATA_DIR: ${oc.env:ROOMENV_DATA_WDS_DIR,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/data_wds_extracted}
+          len_val: 5000
+          load_mask: true
+          load_normal: false
+          mask_source: seen_mask
+          use_sequence_cache: true
+          use_real_extrinsics: true
+          extrinsics_manifest: ${oc.env:ROOMENV_EXTRINSICS_MANIFEST,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/extrinsics_manifest.npz}
+          require_extrinsics: false
+          exclude_invalid_extrinsics: true
+
+  test:
+    _target_: data.dynamic_dataloader.DynamicTorchDataset
+    num_workers: ${num_workers}
+    max_img_per_gpu: 4
+    common_config:
+      img_size: ${img_size}
+      patch_size: ${patch_size}
+      img_nums: [2, 4]
+
+    dataset:
+      _target_: data.composed_dataset.ComposedDataset
+      dataset_configs:
+        - _target_: data.datasets.room_envelopes.RoomEnvelopesDataset
+          split: test
+          DATA_DIR: ${oc.env:ROOMENV_DATA_WDS_DIR,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/data_wds_extracted}
+          len_test: 4000
+          load_mask: true
+          load_normal: false
+          mask_source: seen_mask
+          use_sequence_cache: true
+          use_real_extrinsics: true
+          extrinsics_manifest: ${oc.env:ROOMENV_EXTRINSICS_MANIFEST,${oc.env:ROOMENV_DATA_DIR,/path/to/datasets/room_envelopes}/extrinsics_manifest.npz}
+          require_extrinsics: false
+          exclude_invalid_extrinsics: true
+
+
+logging:
+  log_dir: logs/${exp_name}
+  use_wandb: false
+  log_level_primary: INFO
+  log_level_secondary: WARNING
+
+model:
+  _target_: vggt.models.vggt.VGGT
+
+  # Vanilla VGGT: original depth_head used as a layout proxy.
+  # Pass --use-depth-as-layout (auto-on for E0 in EXPERIMENT_REGISTRY).
+  enable_camera: True
+  enable_depth: True
+  enable_point: False
+  enable_track: False
+  enable_layout_depth: False
+  enable_layout_mask: False
+  enable_layout_normal: False
+  enable_seg: False
